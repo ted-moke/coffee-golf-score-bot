@@ -1,10 +1,24 @@
-import fs from 'fs';
-import path from 'path';
+import { Storage } from '@google-cloud/storage';
 import { ScoreData, Score, PlayerStats, ScoringType } from '../types';
+import { config } from 'dotenv';
 
-// File path for score data
-const DATA_DIR = path.join(__dirname, '../../data');
-const SCORES_FILE = path.join(DATA_DIR, 'scores.json');
+// Load environment variables
+config();
+
+// Initialize Cloud Storage with credentials if provided
+let storage: Storage;
+if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+  const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+  console.log("Using credentials from GOOGLE_APPLICATION_CREDENTIALS_JSON");
+  storage = new Storage({ credentials });
+} else {
+  console.log("No credentials provided, using default Storage");
+  storage = new Storage();
+}
+const BUCKET_NAME = process.env.BUCKET_NAME || 'no-bucket-name';
+const SCORES_FILE = 'scores.json';
+
+console.log('BUCKET_NAME', BUCKET_NAME);
 
 // Default empty data structure
 const defaultData: ScoreData = {
@@ -13,21 +27,24 @@ const defaultData: ScoreData = {
   tournaments: []
 };
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// Load data from file or create new file if it doesn't exist
-export function loadData(): ScoreData {
+// Load data from Cloud Storage or create new file if it doesn't exist
+export async function loadData(): Promise<ScoreData> {
+  console.log('Loading score data from Cloud Storage');
   try {
-    if (fs.existsSync(SCORES_FILE)) {
-      const data = fs.readFileSync(SCORES_FILE, 'utf8');
-      return JSON.parse(data) as ScoreData;
+    const bucket = storage.bucket(BUCKET_NAME);
+    const file = bucket.file(SCORES_FILE);
+    const exists = await file.exists();
+    
+    if (exists[0]) {
+      const data = await file.download();
+      const parsedData = JSON.parse(data[0].toString()) as ScoreData;
+      console.log(`Loaded ${Object.keys(parsedData.players).length} players and ${Object.keys(parsedData.dailyScores).length} daily scores`);
+      return parsedData;
     }
     
+    console.log('No existing score data found, creating new file');
     // If file doesn't exist, create it with default data
-    saveData(defaultData);
+    await saveData(defaultData);
     return defaultData;
   } catch (error) {
     console.error('Error loading score data:', error);
@@ -35,18 +52,22 @@ export function loadData(): ScoreData {
   }
 }
 
-// Save data to file
-export function saveData(data: ScoreData): void {
+// Save data to Cloud Storage
+export async function saveData(data: ScoreData): Promise<void> {
+  console.log('Saving score data to Cloud Storage');
   try {
-    fs.writeFileSync(SCORES_FILE, JSON.stringify(data, null, 2));
+    const bucket = storage.bucket(BUCKET_NAME);
+    const file = bucket.file(SCORES_FILE);
+    await file.save(JSON.stringify(data, null, 2));
+    console.log('Score data saved successfully');
   } catch (error) {
     console.error('Error saving score data:', error);
   }
 }
 
 // Add a new score
-export function addScore(score: Score): { isFirst: boolean, attemptNumber: number } {
-  const data = loadData();
+export async function addScore(score: Score): Promise<{ isFirst: boolean, attemptNumber: number }> {
+  const data = await loadData();
   const { playerId, date } = score;
   
   // Initialize daily scores for this date if needed
@@ -94,7 +115,7 @@ export function addScore(score: Score): { isFirst: boolean, attemptNumber: numbe
   data.players[playerId].averageScore = totalStrokes / playerScores.length;
   
   // Save updated data
-  saveData(data);
+  await saveData(data);
   
   // Return if this was their first score of the day and which attempt it was
   const isFirst = data.dailyScores[date][playerId].length === 1;
@@ -104,8 +125,8 @@ export function addScore(score: Score): { isFirst: boolean, attemptNumber: numbe
 }
 
 // Get player's daily scores
-export function getPlayerDailyScores(playerId: string, date: string): Score[] {
-  const data = loadData();
+export async function getPlayerDailyScores(playerId: string, date: string): Promise<Score[]> {
+  const data = await loadData();
   if (!data.dailyScores[date] || !data.dailyScores[date][playerId]) {
     return [];
   }
@@ -113,37 +134,48 @@ export function getPlayerDailyScores(playerId: string, date: string): Score[] {
 }
 
 // Get player stats
-export function getPlayerStats(playerId: string): PlayerStats | null {
-  const data = loadData();
+export async function getPlayerStats(playerId: string): Promise<PlayerStats | null> {
+  const data = await loadData();
   return data.players[playerId] || null;
 }
 
 // Get all scores for a specific date by scoring type
-export function getDailyScores(date: string, scoringType: ScoringType): Score[] {
-  const data = loadData();
-  const dailyScores = data.dailyScores[date] || {};
-  const scores: Score[] = [];
+export async function getDailyScores(date: string, scoringType: ScoringType): Promise<Score[]> {
+  console.log('getDailyScores() called with date:', date, 'scoringType:', scoringType);
+  const data = await loadData();
   
-  Object.entries(dailyScores).forEach(([playerId, playerScores]) => {
-    if (!Array.isArray(playerScores) || playerScores.length === 0) return;
-    
-    if (scoringType === ScoringType.FIRST) {
-      // Get first score (sorted by timestamp)
-      const sortedScores = [...playerScores].sort((a, b) => a.timestamp - b.timestamp);
-      scores.push(sortedScores[0]);
-    } else if (scoringType === ScoringType.BEST) {
-      // Get best score (lowest strokes)
-      const bestScore = [...playerScores].sort((a, b) => a.strokes - b.strokes)[0];
-      scores.push(bestScore);
-    }
-  });
-  
-  return scores;
+  if (!data.dailyScores[date]) {
+    console.log('No scores found for date:', date);
+    return [];
+  }
+
+  const dailyScores = data.dailyScores[date];
+  console.log('Found raw scores for date:', date, 'scores:', JSON.stringify(dailyScores, null, 2));
+
+  // Convert object to array of scores
+  const allScores = Object.values(dailyScores).flat();
+  console.log('All scores for date:', allScores.length);
+
+  if (scoringType === ScoringType.FIRST) {
+    // Get first attempts only
+    const firstAttempts = Object.values(dailyScores).map(attempts => attempts[0]);
+    console.log('First attempts:', firstAttempts.length);
+    return firstAttempts;
+  } else {
+    // Get best attempts
+    const bestAttempts = Object.values(dailyScores).map(attempts => 
+      attempts.reduce((best, current) => 
+        current.strokes < best.strokes ? current : best
+      )
+    );
+    console.log('Best attempts:', bestAttempts.length);
+    return bestAttempts;
+  }
 }
 
 // Get recent scores (last X days)
-export function getRecentScores(days: number, scoringType: ScoringType): Record<string, Score[]> {
-  const data = loadData();
+export async function getRecentScores(days: number, scoringType: ScoringType): Promise<Record<string, Score[]>> {
+  const data = await loadData();
   const endDate = new Date();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
@@ -159,8 +191,9 @@ export function getRecentScores(days: number, scoringType: ScoringType): Record<
   // Collect scores by player
   const recentScores: Record<string, Score[]> = {};
   
-  datesInRange.forEach(date => {
-    const dailyScores = getDailyScores(date, scoringType);
+  // Wait for all daily scores to be fetched
+  await Promise.all(datesInRange.map(async (date) => {
+    const dailyScores = await getDailyScores(date, scoringType);
     
     dailyScores.forEach(score => {
       if (!recentScores[score.playerId]) {
@@ -168,15 +201,15 @@ export function getRecentScores(days: number, scoringType: ScoringType): Record<
       }
       recentScores[score.playerId].push(score);
     });
-  });
+  }));
   
   return recentScores;
 }
 
 // Get player's attempts count for today
-export function getPlayerAttemptsToday(playerId: string): number {
+export async function getPlayerAttemptsToday(playerId: string): Promise<number> {
   const today = getTodayString();
-  const data = loadData();
+  const data = await loadData();
   
   if (!data.dailyScores[today] || !data.dailyScores[today][playerId]) {
     return 0;
@@ -185,22 +218,22 @@ export function getPlayerAttemptsToday(playerId: string): number {
   return data.dailyScores[today][playerId].length;
 }
 
-// Get today's date string in local time (America/New_York)
-export function getTodayString(): string {
-  const date = new Date();
-  // Convert to NY time
+// Format date to YYYY-MM-DD in NY timezone
+export function formatDate(date: Date = new Date()): string {
+  console.log('formatDate() input:', date);
   const nyDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  return formatDate(nyDate);
+  const formatted = nyDate.toLocaleDateString('en-CA'); // en-CA gives YYYY-MM-DD format
+  console.log('formatDate() NY adjusted output:', formatted);
+  return formatted;
 }
 
-// Format date to YYYY-MM-DD
-export function formatDate(date: Date = new Date()): string {
-  // Convert to NY time
-  const nyDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const year = nyDate.getFullYear();
-  const month = String(nyDate.getMonth() + 1).padStart(2, '0');
-  const day = String(nyDate.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+// Get today's string representation in NY timezone
+export function getTodayString(): string {
+  const nyTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const nyDate = new Date(nyTime);
+  const today = formatDate(nyDate);
+  console.log('getTodayString() returned:', today);
+  return today;
 }
 
 export { ScoringType };

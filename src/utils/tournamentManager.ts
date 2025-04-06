@@ -2,8 +2,8 @@ import { Tournament, ScoringType } from '../types';
 import { loadData, saveData, formatDate, getDailyScores } from './storage';
 
 // Create a new tournament
-export function createTournament(name: string, durationDays: number, scoringType: ScoringType): Tournament {
-  const data = loadData();
+export async function createTournament(name: string, durationDays: number, scoringType: ScoringType): Promise<Tournament> {
+  const data = await loadData();
   
   // Check if a tournament is already active
   if (data.currentTournament) {
@@ -26,13 +26,13 @@ export function createTournament(name: string, durationDays: number, scoringType
   data.tournaments.push(tournament);
   data.currentTournament = name;
   
-  saveData(data);
+  await saveData(data);
   return tournament;
 }
 
 // End the current tournament
-export function endTournament(): Tournament | null {
-  const data = loadData();
+export async function endTournament(): Promise<Tournament | null> {
+  const data = await loadData();
   
   if (!data.currentTournament) {
     return null;
@@ -48,13 +48,13 @@ export function endTournament(): Tournament | null {
   data.tournaments[tournamentIndex].active = false;
   data.currentTournament = undefined;
   
-  saveData(data);
+  await saveData(data);
   return data.tournaments[tournamentIndex];
 }
 
 // Get current tournament
-export function getCurrentTournament(): Tournament | null {
-  const data = loadData();
+export async function getCurrentTournament(): Promise<Tournament | null> {
+  const data = await loadData();
   
   if (!data.currentTournament) {
     return null;
@@ -64,20 +64,20 @@ export function getCurrentTournament(): Tournament | null {
 }
 
 // Get tournament by name
-export function getTournament(name: string): Tournament | null {
-  const data = loadData();
+export async function getTournament(name: string): Promise<Tournament | null> {
+  const data = await loadData();
   return data.tournaments.find(t => t.name === name) || null;
 }
 
 // Get all tournaments
-export function getAllTournaments(): Tournament[] {
-  const data = loadData();
+export async function getAllTournaments(): Promise<Tournament[]> {
+  const data = await loadData();
   return data.tournaments;
 }
 
 // Get tournament scores
-export function getTournamentScores(tournamentName: string, scoringType?: ScoringType): Record<string, { player: string, totalStrokes: number, rounds: number, average: number }> {
-  const data = loadData();
+export async function getTournamentScores(tournamentName: string, scoringType?: ScoringType): Promise<Record<string, { player: string, totalStrokes: number, rounds: number, average: number }>> {
+  const data = await loadData();
   
   // Find tournament
   const tournament = data.tournaments.find(t => t.name === tournamentName);
@@ -103,8 +103,9 @@ export function getTournamentScores(tournamentName: string, scoringType?: Scorin
   // Collect scores for each day using the appropriate scoring type
   const playerScores: Record<string, { player: string, totalStrokes: number, rounds: number, scores: number[] }> = {};
   
-  tournamentDates.forEach(date => {
-    const dailyScores = getDailyScores(date, useScoringType);
+  // Use Promise.all to fetch scores for all dates concurrently
+  await Promise.all(tournamentDates.map(async (date) => {
+    const dailyScores = await getDailyScores(date, useScoringType);
     
     dailyScores.forEach(score => {
       if (!playerScores[score.playerId]) {
@@ -120,7 +121,7 @@ export function getTournamentScores(tournamentName: string, scoringType?: Scorin
       playerScores[score.playerId].rounds += 1;
       playerScores[score.playerId].scores.push(score.strokes);
     });
-  });
+  }));
   
   // Calculate averages
   const result: Record<string, { player: string, totalStrokes: number, rounds: number, average: number }> = {};
@@ -140,8 +141,8 @@ export function getTournamentScores(tournamentName: string, scoringType?: Scorin
 }
 
 // Add player to active tournament
-export function addPlayerToTournament(playerId: string): boolean {
-  const data = loadData();
+export async function addPlayerToTournament(playerId: string): Promise<boolean> {
+  const data = await loadData();
   
   if (!data.currentTournament) {
     return false;
@@ -161,19 +162,19 @@ export function addPlayerToTournament(playerId: string): boolean {
   // Add player to tournament
   data.tournaments[tournamentIndex].participants.push(playerId);
   
-  saveData(data);
+  await saveData(data);
   return true;
 }
 
 // Get tournament status - days remaining, etc.
-export function getTournamentStatus(tournamentName: string): { 
+export async function getTournamentStatus(tournamentName: string): Promise<{ 
   daysElapsed: number, 
   daysRemaining: number, 
   totalDays: number,
   isActive: boolean,
   scoringType: string
-} | null {
-  const data = loadData();
+} | null> {
+  const data = await loadData();
   
   // Find tournament
   const tournament = data.tournaments.find(t => t.name === tournamentName);

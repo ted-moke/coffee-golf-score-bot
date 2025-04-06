@@ -1,9 +1,16 @@
-import { startBot } from './bot';
 import express from 'express';
+import { startBot } from './bot';
+import testRoutes from './routes/test';
 
 // Add Express for HTTP server
 const app = express();
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3000;
+
+// Parse JSON bodies
+app.use(express.json());
+
+// Test routes
+app.use('/test', testRoutes);
 
 // Start the bot
 console.log('Starting Coffee Golf bot...');
@@ -19,5 +26,5 @@ app.get('/', (req, res) => {
 
 // Start HTTP server
 app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+  console.log(`Test server listening at http://localhost:${port}`);
 });

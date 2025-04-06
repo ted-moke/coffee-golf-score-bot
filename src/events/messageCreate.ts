@@ -14,12 +14,17 @@ export async function handleMessage(message: Message): Promise<void> {
   const targetChannelId = process.env.CHANNEL_ID;
   if (message.channelId !== targetChannelId) return;
   
+  console.log(`Message received in target channel from ${message.author.username}: "${message.content}"`);
+  
   // Try to parse the message as a score submission
   const scoreData = parseScoreMessage(message);
   
   if (scoreData) {
+    console.log(`Parsed score data:`, JSON.stringify(scoreData, null, 2));
+    
     // Check attempts
-    const currentAttempts = getPlayerAttemptsToday(scoreData.playerId);
+    const currentAttempts = await getPlayerAttemptsToday(scoreData.playerId);
+    console.log(`Current attempts for ${scoreData.playerName}: ${currentAttempts}`);
     
     if (currentAttempts >= MAX_ATTEMPTS) {
       // Player has reached max attempts for today
@@ -33,7 +38,8 @@ export async function handleMessage(message: Message): Promise<void> {
     }
     
     // Save score
-    const { isFirst, attemptNumber } = addScore(scoreData);
+    const { isFirst, attemptNumber } = await addScore(scoreData);
+    console.log(`Score saved for ${scoreData.playerName}: attempt ${attemptNumber}, isFirst: ${isFirst}`);
     
     // React to confirm score recorded
     try {
