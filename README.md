@@ -101,6 +101,30 @@ gcloud secrets add-iam-policy-binding CHANNEL_ID \
     --member="serviceAccount:service-[PROJECT_NUMBER]@gcp-sa-cloudrun.iam.gserviceaccount.com" \
     --role="roles/secretmanager.secretAccessor"
 
+## Build and Deploy
+
+### Build
+
+`npm run build`
+
+`docker build -t us-central1-docker.pkg.dev/[PROJECT-ID]/[REPO-NAME]/[IMAGE-NAME] .`
+
+Push docker image up to Google Artifact Registry
+
+`docker push us-central1-docker.pkg.dev/[PROJECT-ID]/[REPO-NAME]/[IMAGE-NAME]`
+
+### Deploy
+
+```
+gcloud run deploy coffee-golf-discord-bot \
+  --image us-central1-docker.pkg.dev/[PROJECT-ID]/[REPO-NAME]/[IMAGE-NAME] \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-secrets="DISCORD_TOKEN=DISCORD_TOKEN:latest,CHANNEL_ID=CHANNEL_ID:latest"
+```
+
+
 ### Deploy with secrets
 
 gcloud run deploy coffee-golf-bot \

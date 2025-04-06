@@ -87,11 +87,29 @@ export async function startBot() {
       throw new Error('No Discord token provided');
     }
     
-    // Debug token format (don't log the actual token)
-    console.log('Token length:', token.length);
-    console.log('Token starts with:', token.substring(0, 10) + '...');
+    // Add token validation
+    if (token.includes('\n') || token.includes('\r')) {
+      throw new Error('Token contains newline characters');
+    }
+
+    if (token.includes(' ')) {
+      throw new Error('Token contains spaces');
+    }
+
+    // More detailed debug logging
+    console.log('Token validation:');
+    console.log('- Length:', token.length);
+    console.log('- Starts with:', token.substring(0, 10) + '...');
+    console.log('- Contains whitespace:', /\s/.test(token));
+    console.log('- Contains newline:', /\n/.test(token));
+    console.log('- Contains carriage return:', /\r/.test(token));
+
+    // Clean the token
+    const cleanToken = token.trim();
     
-    await client.login(token);
+    // Try logging in
+    console.log('Attempting to login...');
+    await client.login(cleanToken);
     console.log('Bot successfully logged in!');
     return client;
   } catch (error) {
@@ -99,6 +117,7 @@ export async function startBot() {
     if (error instanceof Error) {
       console.error('Error name:', error.name);
       console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
     }
     throw error;
   }
