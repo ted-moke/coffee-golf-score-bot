@@ -218,20 +218,16 @@ export async function getPlayerAttemptsToday(playerId: string): Promise<number> 
   return data.dailyScores[today][playerId].length;
 }
 
-// Format date to YYYY-MM-DD in NY timezone
+// Format date to YYYY-MM-DD
 export function formatDate(date: Date = new Date()): string {
-  console.log('formatDate() input:', date);
-  const nyDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const formatted = nyDate.toLocaleDateString('en-CA'); // en-CA gives YYYY-MM-DD format
-  console.log('formatDate() NY adjusted output:', formatted);
+  const formatted = date.toISOString().split('T')[0];
+  console.log('formatDate() input:', date, 'output:', formatted);
   return formatted;
 }
 
-// Get today's string representation in NY timezone
+// Get today's string representation
 export function getTodayString(): string {
-  const nyTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-  const nyDate = new Date(nyTime);
-  const today = formatDate(nyDate);
+  const today = formatDate();
   console.log('getTodayString() returned:', today);
   return today;
 }

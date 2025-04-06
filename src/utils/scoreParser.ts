@@ -1,18 +1,16 @@
 import { Message } from 'discord.js';
 import { Score } from '../types';
-import { formatDate } from './storage';
 
 // Extract scores from message content
 export function parseScoreMessage(message: Message): Score | null {
-  const content = message.content.trim();
+  const content = message.content.toLowerCase();
   
-  // Regex pattern to match "Coffee Golf - [Date] [Score] Strokes"
-  // Example: "Coffee Golf - Apr 5 13 Strokes"
-  const scorePattern = /Coffee Golf\s*-\s*([A-Za-z]+\s+\d+)\s*(\d+)\s*Strokes/i;
-  const match = content.match(scorePattern);
+  // Match pattern: "Apr 5: 13" or "Apr 5 - 13" or "Apr 5 13"
+  const pattern = /([a-z]{3}\s+\d{1,2})(?::|-)?\s*(\d{1,2})/i;
+  const match = content.match(pattern);
   
   if (!match) {
-    return null; // Not a valid score message
+    return null;
   }
   
   // Extract components
@@ -24,12 +22,10 @@ export function parseScoreMessage(message: Message): Score | null {
   const emojis = content.match(emojiPattern);
   const route = emojis ? emojis.join('') : undefined;
   
-  // Parse date string (e.g., "Apr 5" to YYYY-MM-DD) in NY timezone
+  // Parse date string (e.g., "Apr 5" to YYYY-MM-DD)
   const currentYear = new Date().getFullYear();
   const dateObj = new Date(`${dateStr}, ${currentYear}`);
-  // Convert the date to NY timezone
-  const nyDate = new Date(dateObj.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const formattedDate = formatDate(nyDate);
+  const formattedDate = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
   
   // Create score object with timestamp
   const score: Score = {
@@ -38,7 +34,7 @@ export function parseScoreMessage(message: Message): Score | null {
     date: formattedDate,
     strokes: strokes,
     messageId: message.id,
-    timestamp: message.createdTimestamp,  // Add timestamp to track order
+    timestamp: message.createdTimestamp,
     route: route
   };
   
