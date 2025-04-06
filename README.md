@@ -37,7 +37,7 @@ The Coffee Golf Discord Bot is a tool for tracking and displaying scores from a 
    Create a `.env` file in the root directory and add your Discord bot token and target channel ID:
 
    ```plaintext
-   TOKEN=your_discord_bot_token
+   DISCORD_TOKEN=your_discord_bot_token
    CHANNEL_ID=your_target_channel_id
    ```
 
@@ -83,6 +83,32 @@ Coffee Golf - Apr 5
 
 🟪🟨🟩🟦🟥
 2️⃣2️⃣2️⃣2️⃣2️⃣
+
+## Hosting on Google Cloud Run
+
+### Create secrets
+
+gcloud secrets create DISCORD_TOKEN --data-file=- <<< "your_discord_token"
+gcloud secrets create CHANNEL_ID --data-file=- <<< "your_channel_id"
+
+### Grant access to Cloud Run
+
+gcloud secrets add-iam-policy-binding DISCORD_TOKEN \
+    --member="serviceAccount:service-[PROJECT_NUMBER]@gcp-sa-cloudrun.iam.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding CHANNEL_ID \
+    --member="serviceAccount:service-[PROJECT_NUMBER]@gcp-sa-cloudrun.iam.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+
+### Deploy with secrets
+
+gcloud run deploy coffee-golf-bot \
+  --image gcr.io/[PROJECT-ID]/coffee-golf-bot \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-secrets="TOKEN=DISCORD_TOKEN:latest,CHANNEL_ID=CHANNEL_ID:latest"
 
 ## Contributing
 
