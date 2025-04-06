@@ -86,6 +86,10 @@ Coffee Golf - Apr 5
 
 ## Hosting on Google Cloud Run
 
+> [!NOTE]
+> This section may be incomplete, I had to do a bunch of stuff and couldn't track it all down.
+> If you need to do this, please ask an LLM to help you.
+
 ### Create secrets
 
 gcloud secrets create DISCORD_TOKEN --data-file=- <<< "your_discord_token"
