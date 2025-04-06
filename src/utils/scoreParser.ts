@@ -24,10 +24,12 @@ export function parseScoreMessage(message: Message): Score | null {
   const emojis = content.match(emojiPattern);
   const route = emojis ? emojis.join('') : undefined;
   
-  // Parse date string (e.g., "Apr 5" to YYYY-MM-DD)
+  // Parse date string (e.g., "Apr 5" to YYYY-MM-DD) in NY timezone
   const currentYear = new Date().getFullYear();
   const dateObj = new Date(`${dateStr}, ${currentYear}`);
-  const formattedDate = formatDate(dateObj);
+  // Convert the date to NY timezone
+  const nyDate = new Date(dateObj.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const formattedDate = formatDate(nyDate);
   
   // Create score object with timestamp
   const score: Score = {

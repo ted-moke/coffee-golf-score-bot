@@ -185,14 +185,22 @@ export function getPlayerAttemptsToday(playerId: string): number {
   return data.dailyScores[today][playerId].length;
 }
 
-// Format date as YYYY-MM-DD
-export function formatDate(date: Date = new Date()): string {
-  return date.toISOString().split('T')[0];
+// Get today's date string in local time (America/New_York)
+export function getTodayString(): string {
+  const date = new Date();
+  // Convert to NY time
+  const nyDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  return formatDate(nyDate);
 }
 
-// Get today's date string
-export function getTodayString(): string {
-  return formatDate();
+// Format date to YYYY-MM-DD
+export function formatDate(date: Date = new Date()): string {
+  // Convert to NY time
+  const nyDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const year = nyDate.getFullYear();
+  const month = String(nyDate.getMonth() + 1).padStart(2, '0');
+  const day = String(nyDate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export { ScoringType };

@@ -6,12 +6,10 @@ import * as leaderboardCommand from './commands/leaderboard';
 // Load environment variables
 config();
 
-// Check for required environment variables
-if (!process.env.TOKEN) {
-  throw new Error('Missing Discord bot token in .env file');
-}
+// Store commands
+const commands = [leaderboardCommand];
 
-// Create a new client instance
+// Create the client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -20,12 +18,38 @@ const client = new Client({
   ],
 });
 
-// Store commands
-const commands = [leaderboardCommand];
+// Register slash commands
+async function registerCommands() {
+  try {
+    console.log('Started refreshing application commands.');
+
+    const commandsData = commands.map(command => command.data.toJSON());
+    const token = process.env.DISCORD_TOKEN;
+    if (!token) {
+      throw new Error('No Discord token provided');
+    }
+
+    const rest = new REST().setToken(token);
+
+    // Get the client ID from the bot user
+    const clientId = client.user!.id;
+
+    // Register global commands
+    await rest.put(
+      Routes.applicationCommands(clientId),
+      { body: commandsData },
+    );
+
+    console.log('Successfully reloaded application commands.');
+  } catch (error) {
+    console.error('Error registering commands:', error);
+  }
+}
 
 // Handle ready event
 client.once(Events.ClientReady, () => {
   console.log(`Logged in as ${client.user?.tag}!`);
+  console.log(`Watching channel ID: ${process.env.CHANNEL_ID}`);
   registerCommands();
 });
 
@@ -55,32 +79,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// Register slash commands
-async function registerCommands() {
-  try {
-    console.log('Started refreshing application commands.');
-
-    const commandsData = commands.map(command => command.data.toJSON());
-    
-    const rest = new REST().setToken(process.env.TOKEN!);
-
-    // Get the client ID from the bot user
-    const clientId = client.user!.id;
-
-    // Register global commands
-    await rest.put(
-      Routes.applicationCommands(clientId),
-      { body: commandsData },
-    );
-
-    console.log('Successfully reloaded application commands.');
-  } catch (error) {
-    console.error(error);
-  }
-}
-
 // Function to start the bot
-export function startBot() {
-  // Login to Discord with the client token
-  client.login(process.env.TOKEN);
+export async function startBot() {
+  try {
+    const token = process.env.DISCORD_TOKEN;
+    if (!token) {
+      throw new Error('No Discord token provided');
+    }
+    
+    // Debug token format (don't log the actual token)
+    console.log('Token length:', token.length);
+    console.log('Token starts with:', token.substring(0, 10) + '...');
+    
+    await client.login(token);
+    console.log('Bot successfully logged in!');
+    return client;
+  } catch (error) {
+    console.error('Failed to start bot:', error);
+    if (error instanceof Error) {
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+    }
+    throw error;
+  }
 }
