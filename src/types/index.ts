@@ -33,7 +33,7 @@ export interface Score {
     endDate: string;
     participants: string[]; // Player IDs
     active: boolean;
-    scoringType: 'first' | 'best'; // Track which scoring type to use for this tournament
+    scoringType: ScoringType;
   }
   
   // Main data structure for storage

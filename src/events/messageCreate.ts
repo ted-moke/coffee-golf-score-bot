@@ -1,6 +1,7 @@
 import { Message } from 'discord.js';
 import { parseScoreMessage } from '../utils/scoreParser';
-import { addScore, getPlayerAttemptsToday } from '../utils/storage';
+import { addScore, getPlayerAttemptsToday, getDailyScores } from '../utils/storage';
+import { ScoringType } from '../types';
 
 // Maximum attempts allowed per day
 const MAX_ATTEMPTS = 3;
@@ -45,14 +46,19 @@ export async function handleMessage(message: Message): Promise<void> {
     console.log(`Score saved for ${scoreData.playerName}: attempt ${attemptNumber}, isFirst: ${isFirst}`);
     
     try {
-      // If they're on their last attempt, let them know
-      if (attemptNumber === MAX_ATTEMPTS) {
-        await message.reply(`This was your last attempt (${MAX_ATTEMPTS}/${MAX_ATTEMPTS}) for today.`);
+      // Get all scores for today using unlimited scoring to check if this is the best
+      const todayScores = await getDailyScores(scoreData.date, ScoringType.UNLIMITED);
+      const lowestScore = Math.min(...todayScores.map(s => s.strokes)) || Infinity;
+      
+      // If this score is the lowest (or tied for lowest), add trophy reaction
+      if (scoreData.strokes <= lowestScore) {
+        await message.react('🏆');
+        await message.reply(`This is the lowest score so far today! ${scoreData.playerName} is leading the pack!`);
       }
       
       console.log(`Recorded score for ${scoreData.playerName}: ${scoreData.strokes} strokes (Attempt ${attemptNumber}/${MAX_ATTEMPTS})`);
     } catch (error) {
-      console.error('Error adding reaction:', error);
+      console.error('Error handling score message:', error);
     }
   }
 }
