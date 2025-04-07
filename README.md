@@ -13,7 +13,7 @@ The Coffee Golf Discord Bot is a tool for tracking and displaying scores from a 
 
 ### Prerequisites
 
-- Node.js (version 14 or higher)
+- Node.js (version 22 or higher)
 - npm (Node Package Manager)
 - A Discord bot token
 
@@ -83,6 +83,19 @@ Coffee Golf - Apr 5
 
 🟪🟨🟩🟦🟥
 2️⃣2️⃣2️⃣2️⃣2️⃣
+
+### Leaderboard
+
+Use these commands to view the leaderboard:
+
+```
+/leaderboard today first
+/leaderboard today best
+/leaderboard today unlimited
+/leaderboard recent 7 first
+/leaderboard recent 7 best
+/leaderboard recent 7 unlimited
+```
 
 ## Hosting on Google Cloud Run
 
