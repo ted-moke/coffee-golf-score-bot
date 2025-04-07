@@ -17,7 +17,8 @@ export const data = new SlashCommandBuilder()
           .setRequired(false)
           .addChoices(
             { name: 'First attempt', value: 'first' },
-            { name: 'Best of 3 attempts', value: 'best' }
+            { name: 'Best of 3 attempts', value: 'best' },
+            { name: 'Best attempt (unlimited)', value: 'unlimited' }
           )
       )
   )
@@ -40,7 +41,8 @@ export const data = new SlashCommandBuilder()
           .setRequired(false)
           .addChoices(
             { name: 'First attempt', value: 'first' },
-            { name: 'Best of 3 attempts', value: 'best' }
+            { name: 'Best of 3 attempts', value: 'best' },
+            { name: 'Best attempt (unlimited)', value: 'unlimited' }
           )
       )
   );

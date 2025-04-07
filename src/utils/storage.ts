@@ -152,24 +152,29 @@ export async function getDailyScores(date: string, scoringType: ScoringType): Pr
   const dailyScores = data.dailyScores[date];
   console.log('Found raw scores for date:', date, 'scores:', JSON.stringify(dailyScores, null, 2));
 
-  // Convert object to array of scores
-  const allScores = Object.values(dailyScores).flat();
-  console.log('All scores for date:', allScores.length);
-
-  if (scoringType === ScoringType.FIRST) {
-    // Get first attempts only
-    const firstAttempts = Object.values(dailyScores).map(attempts => attempts[0]);
-    console.log('First attempts:', firstAttempts.length);
-    return firstAttempts;
-  } else {
-    // Get best attempts
-    const bestAttempts = Object.values(dailyScores).map(attempts => 
-      attempts.reduce((best, current) => 
-        current.strokes < best.strokes ? current : best
-      )
-    );
-    console.log('Best attempts:', bestAttempts.length);
-    return bestAttempts;
+  switch (scoringType) {
+    case ScoringType.FIRST:
+      // Get first attempts only
+      return Object.values(dailyScores).map(attempts => attempts[0]);
+      
+    case ScoringType.BEST:
+      // Get best of first 3 attempts
+      return Object.values(dailyScores).map(attempts => 
+        attempts.slice(0, 3).reduce((best, current) => 
+          current.strokes < best.strokes ? current : best
+        )
+      );
+      
+    case ScoringType.UNLIMITED:
+      // Get best attempt regardless of attempt number
+      return Object.values(dailyScores).map(attempts => 
+        attempts.reduce((best, current) => 
+          current.strokes < best.strokes ? current : best
+        )
+      );
+      
+    default:
+      return [];
   }
 }
 

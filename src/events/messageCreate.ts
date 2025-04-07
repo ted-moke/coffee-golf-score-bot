@@ -44,21 +44,7 @@ export async function handleMessage(message: Message): Promise<void> {
     const { isFirst, attemptNumber } = await addScore(scoreData);
     console.log(`Score saved for ${scoreData.playerName}: attempt ${attemptNumber}, isFirst: ${isFirst}`);
     
-    // React to confirm score recorded
     try {
-      await message.react('✅');
-      
-      // If it's their first score, add "1️⃣" reaction
-      if (isFirst) {
-        await message.react('1️⃣');
-      }
-      
-      // Add attempt number reaction
-      const attemptEmojis = ['1️⃣', '2️⃣', '3️⃣'];
-      if (attemptNumber > 0 && attemptNumber <= attemptEmojis.length) {
-        await message.react(attemptEmojis[attemptNumber - 1]);
-      }
-      
       // If they're on their last attempt, let them know
       if (attemptNumber === MAX_ATTEMPTS) {
         await message.reply(`This was your last attempt (${MAX_ATTEMPTS}/${MAX_ATTEMPTS}) for today.`);

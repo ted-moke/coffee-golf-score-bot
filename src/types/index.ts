@@ -49,5 +49,6 @@ export interface Score {
   // Scoring types enum
   export enum ScoringType {
     FIRST = 'first',
-    BEST = 'best'
+    BEST = 'best',
+    UNLIMITED = 'unlimited'
   }
