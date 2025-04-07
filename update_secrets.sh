@@ -33,11 +33,14 @@ update_secret() {
         return
     fi
 
+    # Clean the secret value (remove whitespace and newlines)
+    secret_value=$(echo "$secret_value" | tr -d '[:space:]')
+
     echo "🔄 Updating secret: $secret_name"
     # First create the secret if it doesn't exist
     gcloud secrets create "$secret_name" --quiet 2>/dev/null || true
     # Then update its value
-    echo "$secret_value" | gcloud secrets versions add "$secret_name" --data-file=-
+    echo -n "$secret_value" | gcloud secrets versions add "$secret_name" --data-file=-
 }
 
 update_all_secrets() {

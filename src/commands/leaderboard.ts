@@ -47,21 +47,19 @@ export const data = new SlashCommandBuilder()
 
 // Execute command
 export async function execute(interaction: ChatInputCommandInteraction) {
-    // First try to acknowledge the interaction immediately
+    // Don't defer the reply immediately, try to respond quickly first
     try {
-        await interaction.deferReply();
-    } catch (error) {
-        console.error('Failed to defer reply:', error);
-        return; // Exit early if we can't defer
-    }
-
-    try {
-        console.log(`Leaderboard command received from ${interaction.user.username}`);
-        
         const subcommand = interaction.options.getSubcommand();
         const scoringType = (interaction.options.getString('scoring') || 'first') as ScoringType;
         
+        console.log(`Leaderboard command received from ${interaction.user.username}`);
         console.log(`Subcommand: ${subcommand}, Scoring type: ${scoringType}`);
+
+        // Send an initial response immediately
+        await interaction.reply({ 
+            content: "Fetching leaderboard data...", 
+            ephemeral: false 
+        });
 
         if (subcommand === 'today') {
             console.log('Fetching today\'s leaderboard');
@@ -74,14 +72,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     } catch (error) {
         console.error('Error executing leaderboard command:', error);
         
-        // Only try to send an error message if we haven't already failed to interact
         try {
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({ 
                     content: 'There was an error while fetching the leaderboard!',
-                    flags: [64] // Ephemeral flag
+                    ephemeral: true
                 });
-            } else if (interaction.deferred) {
+            } else {
                 await interaction.editReply('There was an error while fetching the leaderboard!');
             }
         } catch (followUpError) {
@@ -93,29 +90,32 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 // Show today's leaderboard
 async function showTodayLeaderboard(interaction: ChatInputCommandInteraction, scoringType: ScoringType): Promise<void> {
   try {
-    const scores = await getDailyScores(getTodayString(), scoringType);
-    console.log(`Found ${scores.length} scores for today with ${scoringType} scoring`);
+    const today = getTodayString();
+    console.log('Getting scores for date:', today);
     
+    const scores = await getDailyScores(today, scoringType);
+    console.log(`Found ${scores.length} scores for today`);
+
     if (scores.length === 0) {
       await interaction.editReply('No scores recorded today!');
       return;
     }
     
     // Sort scores by strokes (lowest first)
-    const sortedScores = [...scores].sort((a, b) => a.strokes - b.strokes);
+    const sortedScores = scores.sort((a, b) => a.strokes - b.strokes);
     
     // Create embed
     const embed = new EmbedBuilder()
       .setColor('#0099ff')
       .setTitle('☕⛳ Coffee Golf Leaderboard - Today')
-      .setDescription(`Scores for ${formatDate()}`)
+      .setDescription(`Showing ${scoringType} scores for ${formatDate()}`)
       .setTimestamp();
     
     // Add scores to embed
     let leaderboardText = '';
     sortedScores.forEach((score, index) => {
       const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-      leaderboardText += `${medal} **${score.playerName}**: ${score.strokes} strokes\n`;
+      leaderboardText += `${medal} **${score.playerName}**: ${score.strokes} strokes ${score.route || ''}\n`;
     });
     
     embed.addFields({ name: 'Scores', value: leaderboardText || 'No scores yet' });
@@ -162,7 +162,7 @@ async function showRecentLeaderboard(interaction: ChatInputCommandInteraction, d
     // Add scores to embed
     let leaderboardText = '';
     sortedPlayers.forEach((player, index) => {
-      const medal = index === 0 ? '��' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+      const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
       leaderboardText += `${medal} **${player.playerName}**: ${player.totalStrokes} total strokes (${player.games} games)\n`;
     });
     

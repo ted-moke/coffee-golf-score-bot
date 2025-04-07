@@ -9,10 +9,13 @@ const MAX_ATTEMPTS = 3;
 export async function handleMessage(message: Message): Promise<void> {
   // Ignore bot messages
   if (message.author.bot) return;
-  
+
   // Only process messages from the target channel
-  const targetChannelId = process.env.CHANNEL_ID;
-  if (message.channelId !== targetChannelId) return;
+  // Trim any whitespace from the channel ID
+  const targetChannelId = process.env.CHANNEL_ID?.trim();
+  if (message.channelId !== targetChannelId) {
+    return;
+  }
   
   console.log(`Message received in target channel from ${message.author.username}: "${message.content}"`);
   
