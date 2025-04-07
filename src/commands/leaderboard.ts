@@ -87,6 +87,42 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 }
 
+// Helper function to get scoring type display name
+function getScoringTypeDisplay(scoringType: ScoringType): string {
+  switch (scoringType) {
+    case ScoringType.FIRST:
+      return 'First Attempt Only';
+    case ScoringType.BEST:
+      return 'Best of 3 Attempts';
+    case ScoringType.UNLIMITED:
+      return 'Best Attempt (Unlimited Tries)';
+    default:
+      return 'Unknown Scoring Type';
+  }
+}
+
+// Helper function to generate position string with ties
+function getPositionString(index: number, scores: any[], currentScore: number): string {
+  // Count how many players have the same score before this position
+  const tiedPlayers = scores.filter((s, i) => i < index && s.strokes === currentScore).length;
+  
+  // If there are tied players, this player's position should be adjusted
+  const actualPosition = index - tiedPlayers;
+  
+  // Check if this is part of a tie
+  const isPartOfTie = scores.filter(s => s.strokes === currentScore).length > 1;
+  
+  if (isPartOfTie) {
+    return actualPosition === 0 ? 'T-1' : `T-${actualPosition + 1}`;
+  }
+  
+  // Return medal for top 3 non-tied positions, otherwise return number
+  if (actualPosition === 0) return '🥇';
+  if (actualPosition === 1) return '🥈';
+  if (actualPosition === 2) return '🥉';
+  return `${actualPosition + 1}.`;
+}
+
 // Show today's leaderboard
 async function showTodayLeaderboard(interaction: ChatInputCommandInteraction, scoringType: ScoringType): Promise<void> {
   try {
@@ -108,14 +144,14 @@ async function showTodayLeaderboard(interaction: ChatInputCommandInteraction, sc
     const embed = new EmbedBuilder()
       .setColor('#0099ff')
       .setTitle('☕⛳ Coffee Golf Leaderboard - Today')
-      .setDescription(`Showing ${scoringType} scores for ${formatDate()}`)
+      .setDescription(`**${getScoringTypeDisplay(scoringType)}**\n${formatDate()}`)
       .setTimestamp();
     
     // Add scores to embed
     let leaderboardText = '';
     sortedScores.forEach((score, index) => {
-      const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-      leaderboardText += `${medal} **${score.playerName}**: ${score.strokes} strokes ${score.route || ''}\n`;
+      const position = getPositionString(index, sortedScores, score.strokes);
+      leaderboardText += `${position} **${score.playerName}**: ${score.strokes} strokes ${score.route || ''}\n`;
     });
     
     embed.addFields({ name: 'Scores', value: leaderboardText || 'No scores yet' });
@@ -123,7 +159,7 @@ async function showTodayLeaderboard(interaction: ChatInputCommandInteraction, sc
     await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error('Error in showTodayLeaderboard:', error);
-    throw error; // Let the main error handler deal with it
+    throw error;
   }
 }
 
@@ -156,14 +192,14 @@ async function showRecentLeaderboard(interaction: ChatInputCommandInteraction, d
     const embed = new EmbedBuilder()
       .setColor('#0099ff')
       .setTitle(`☕⛳ Coffee Golf Leaderboard - Last ${days} Days`)
-      .setDescription(`Cumulative scores from ${formatDate(new Date(Date.now() - days * 86400000))} to ${formatDate()}`)
+      .setDescription(`**${getScoringTypeDisplay(scoringType)}**\n${formatDate(new Date(Date.now() - days * 86400000))} to ${formatDate()}`)
       .setTimestamp();
     
     // Add scores to embed
     let leaderboardText = '';
     sortedPlayers.forEach((player, index) => {
-      const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-      leaderboardText += `${medal} **${player.playerName}**: ${player.totalStrokes} total strokes (${player.games} games)\n`;
+      const position = getPositionString(index, sortedPlayers, player.totalStrokes);
+      leaderboardText += `${position} **${player.playerName}**: ${player.totalStrokes} total strokes (${player.games} games)\n`;
     });
     
     embed.addFields({ name: 'Cumulative Scores', value: leaderboardText || 'No scores yet' });
@@ -171,7 +207,7 @@ async function showRecentLeaderboard(interaction: ChatInputCommandInteraction, d
     await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error('Error in showRecentLeaderboard:', error);
-    throw error; // Let the main error handler deal with it
+    throw error;
   }
 }
 
