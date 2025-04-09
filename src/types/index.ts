@@ -52,3 +52,11 @@ export interface Score {
     BEST = 'best',
     UNLIMITED = 'unlimited'
   }
+
+  export interface LeaderboardEntry {
+    playerId: string;
+    playerName: string;
+    totalStrokes: number;
+    games: number;
+  }
+  

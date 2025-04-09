@@ -1,6 +1,7 @@
 import express from 'express';
-import { addScore, getDailyScores, getRecentScores, loadData, saveData, formatDate, getTodayString } from '../utils/storage';
-import { Score, ScoringType } from '../types';
+import { addScore, getDailyScores, getRecentScores, loadData, saveData, formatDate, getTodayString, getNYCTodayString, getNYCTodayDate } from '../utils/storage';
+import { LeaderboardEntry, Score, ScoringType } from '../types';
+import { getScoringTypeFromString, getScoringTypeDisplay } from '../utils/scoring';
 
 const router = express.Router();
 
@@ -38,7 +39,7 @@ router.post('/score', async (req, res) => {
 router.get('/scores/today', async (req, res) => {
     try {
         const scoringType = (req.query.scoring as ScoringType) || ScoringType.FIRST;
-        const scores = await getDailyScores(getTodayString(), scoringType);
+        const scores = await getDailyScores(getNYCTodayString(), scoringType);
         res.json(scores);
     } catch (error) {
         res.status(500).json({ error: 'Failed to get scores' });
@@ -132,6 +133,117 @@ router.get('/scores/date', async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ error: 'Failed to get scores' });
+    }
+});
+
+// Test route for checking server status
+router.get('/', (req, res) => {
+    res.json({ status: 'OK', message: 'Test route is working' });
+});
+
+// Test route for today's leaderboard
+router.get('/leaderboard/today', async (req, res) => {
+    try {
+        const scoringOption = req.query.scoring as string || 'first';
+        const today = getNYCTodayString();
+        
+        if (scoringOption === 'all') {
+            // Show all scoring types
+            const results: Record<string, Score[]> = {};
+            
+            for (const type of [ScoringType.FIRST, ScoringType.BEST, ScoringType.UNLIMITED]) {
+                const scores = await getDailyScores(today, type);
+                const sortedScores = scores.sort((a, b) => a.strokes - b.strokes);
+                results[getScoringTypeDisplay(type)] = sortedScores;
+            }
+            
+            res.json({
+                title: `Coffee Golf Leaderboard - Today (${today})`,
+                description: 'All Scoring Types',
+                results
+            });
+        } else {
+            // Show single scoring type
+            const scoringType = getScoringTypeFromString(scoringOption);
+            const scores = await getDailyScores(today, scoringType);
+            const sortedScores = scores.sort((a, b) => a.strokes - b.strokes);
+            
+            res.json({
+                title: `Coffee Golf Leaderboard - Today (${today})`,
+                description: getScoringTypeDisplay(scoringType),
+                scores: sortedScores
+            });
+        }
+    } catch (error) {
+        console.error('Error in test leaderboard/today:', error);
+        res.status(500).json({ error: 'Failed to get today\'s leaderboard' });
+    }
+});
+
+// Test route for recent leaderboard
+router.get('/leaderboard/recent', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days as string) || 7;
+        const scoringOption = req.query.scoring as string || 'first';
+        
+        if (scoringOption === 'all') {
+            // Show all scoring types
+            const results: Record<string, LeaderboardEntry[]> = {};
+            
+            for (const type of [ScoringType.FIRST, ScoringType.BEST, ScoringType.UNLIMITED]) {
+                const recentScores = await getRecentScores(days, type);
+                
+                // Calculate cumulative scores for each player
+                const playerCumulativeScores = Object.entries(recentScores).map(([playerId, scores]) => {
+                    const totalStrokes = scores.reduce((sum, score) => sum + score.strokes, 0);
+                    return {
+                        playerId,
+                        playerName: scores[0].playerName,
+                        totalStrokes,
+                        games: scores.length
+                    };
+                });
+                
+                // Sort by total strokes (lowest first)
+                const sortedPlayers = playerCumulativeScores.sort((a, b) => a.totalStrokes - b.totalStrokes);
+                results[getScoringTypeDisplay(type)] = sortedPlayers;
+            }
+            
+            res.json({
+                title: `Coffee Golf Leaderboard - Last ${days} Days`,
+                description: 'All Scoring Types',
+                dateRange: `${formatDate(new Date(Date.now() - days * 86400000))} to ${formatDate()}`,
+                results
+            });
+        } else {
+            const scoringType = getScoringTypeFromString(scoringOption);
+            const recentScores = await getRecentScores(days, scoringType);
+            
+            // Calculate cumulative scores for each player
+            const playerCumulativeScores = Object.entries(recentScores).map(([playerId, scores]) => {
+                const totalStrokes = scores.reduce((sum, score) => sum + score.strokes, 0);
+                return {
+                    playerId,
+                    playerName: scores[0].playerName,
+                    totalStrokes,
+                    games: scores.length,
+                    avgStrokes: totalStrokes / scores.length
+                };
+            });
+            
+            // Sort by total strokes (lowest first)
+            const sortedPlayers = playerCumulativeScores.sort((a, b) => a.totalStrokes - b.totalStrokes);
+            
+            res.json({
+                title: `Coffee Golf Leaderboard - Last ${days} Days`,
+                description: getScoringTypeDisplay(scoringType),
+                dateRange: `${formatDate(new Date(Date.now() - days * 86400000))} to ${formatDate()}`,
+                players: sortedPlayers
+            });
+        }
+    } catch (error) {
+        console.error('Error in test leaderboard/recent:', error);
+        res.status(500).json({ error: 'Failed to get recent leaderboard' });
     }
 });
 

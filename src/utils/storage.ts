@@ -146,6 +146,7 @@ export async function getDailyScores(date: string, scoringType: ScoringType): Pr
   
   if (!data.dailyScores[date]) {
     console.log('No scores found for date:', date);
+    console.log('Most recent date:', Object.keys(data.dailyScores).sort().pop());
     return [];
   }
 
@@ -181,8 +182,8 @@ export async function getDailyScores(date: string, scoringType: ScoringType): Pr
 // Get recent scores (last X days)
 export async function getRecentScores(days: number, scoringType: ScoringType): Promise<Record<string, Score[]>> {
   const data = await loadData();
-  const endDate = new Date();
-  const startDate = new Date();
+  const endDate = getNYCTodayDate();
+  const startDate = getNYCTodayDate();
   startDate.setDate(startDate.getDate() - days);
   
   // Get dates in range
@@ -212,8 +213,12 @@ export async function getRecentScores(days: number, scoringType: ScoringType): P
 }
 
 // Get player's attempts count for today
-export async function getPlayerAttemptsToday(playerId: string): Promise<number> {
-  const today = getTodayString();
+export async function getPlayerAttemptsToday(playerId: string, date?: Date): Promise<number> {
+  if (!date) {
+    date = new Date();
+  }
+  
+  const today = formatDate(date);
   const data = await loadData();
   
   if (!data.dailyScores[today] || !data.dailyScores[today][playerId]) {
@@ -235,6 +240,19 @@ export function getTodayString(): string {
   const today = formatDate();
   console.log('getTodayString() returned:', today);
   return today;
+}
+
+export function getNYCTodayString(): string {
+  const nyDate = new Date(Date.now() - 4 * 60 * 60 * 1000);
+  console.log('getNYCTodayString() returned:', nyDate.toISOString());
+  return formatDate(nyDate);
+}
+
+export function getNYCTodayDate(): Date {
+  const nyDate = new Date(Date.now() - 4 * 60 * 60 * 1000);
+  console.log('getNYCTodayDate() returned:', nyDate.toISOString());
+  console.log('now', new Date().toISOString());
+  return nyDate;
 }
 
 export { ScoringType };

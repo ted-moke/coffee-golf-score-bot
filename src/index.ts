@@ -9,22 +9,13 @@ const port = process.env.PORT || 3000;
 // Parse JSON bodies
 app.use(express.json());
 
-// Test routes
+// Register routes
 app.use('/test', testRoutes);
 
-// Start the bot
-console.log('Starting Coffee Golf bot...');
-startBot().catch(error => {
-  console.error('Failed to start bot:', error);
-  process.exit(1);
-});
-
-// Add health check endpoint
-app.get('/', (req, res) => {
-  res.send('Coffee Golf Bot is running!');
-});
-
-// Start HTTP server
+// Start the server
 app.listen(port, () => {
-  console.log(`Test server listening at http://localhost:${port}`);
+  console.log(`Server running on port ${port}`);
+  
+  // Start the Discord bot
+  startBot();
 });
