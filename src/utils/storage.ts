@@ -225,10 +225,16 @@ function applyScoring(rawScores: Record<string, Score[]>, scoringType: ScoringTy
 
 // Get recent scores (last X days)
 export async function getRecentScores(days: number, scoringType: ScoringType): Promise<Record<string, Score[]>> {
+  console.log(`Getting recent scores for last ${days} days with scoring type ${scoringType}`);
   const data = await loadData();
+  
+  // Get the current date in NYC timezone
   const endDate = getNYCTodayDate();
-  const startDate = getNYCTodayDate();
-  startDate.setDate(startDate.getDate() - days);
+  // Calculate start date by subtracting days
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - days + 1); // +1 to include today
+  
+  console.log(`Date range: ${formatDate(startDate)} to ${formatDate(endDate)}`);
   
   // Get dates in range
   const datesInRange: string[] = [];
@@ -238,12 +244,16 @@ export async function getRecentScores(days: number, scoringType: ScoringType): P
     currentDate.setDate(currentDate.getDate() + 1);
   }
   
+  console.log(`Dates in range: ${datesInRange.join(', ')}`);
+  
   // Collect scores by player
   const recentScores: Record<string, Score[]> = {};
   
   // Wait for all daily scores to be fetched
   await Promise.all(datesInRange.map(async (date) => {
+    console.log(`Fetching scores for date: ${date}`);
     const dailyScores = await getDailyScores(date, scoringType);
+    console.log(`Found ${dailyScores.length} scores for ${date}`);
     
     dailyScores.forEach(score => {
       if (!recentScores[score.playerId]) {
@@ -252,6 +262,14 @@ export async function getRecentScores(days: number, scoringType: ScoringType): P
       recentScores[score.playerId].push(score);
     });
   }));
+  
+  // Log the collected scores for debugging
+  Object.entries(recentScores).forEach(([playerId, scores]) => {
+    console.log(`Player ${playerId} has ${scores.length} scores in date range`);
+    scores.forEach(score => {
+      console.log(`  ${score.date}: ${score.strokes} strokes`);
+    });
+  });
   
   return recentScores;
 }

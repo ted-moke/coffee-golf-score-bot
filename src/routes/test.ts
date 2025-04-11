@@ -193,19 +193,29 @@ router.get('/leaderboard/recent', async (req, res) => {
             for (const type of [ScoringType.FIRST, ScoringType.BEST, ScoringType.UNLIMITED]) {
                 const recentScores = await getRecentScores(days, type);
                 
-                // Calculate cumulative scores for each player
+                // Calculate cumulative scores and average for each player
                 const playerCumulativeScores = Object.entries(recentScores).map(([playerId, scores]) => {
                     const totalStrokes = scores.reduce((sum, score) => sum + score.strokes, 0);
+                    const avgStrokes = scores.length > 0 ? totalStrokes / scores.length : 0;
                     return {
                         playerId,
                         playerName: scores[0].playerName,
                         totalStrokes,
-                        games: scores.length
+                        games: scores.length,
+                        avgStrokes
                     };
                 });
                 
-                // Sort by total strokes (lowest first)
-                const sortedPlayers = playerCumulativeScores.sort((a, b) => a.totalStrokes - b.totalStrokes);
+                // Sort by average strokes (lowest first), then by total games (highest first) for tiebreakers
+                const sortedPlayers = playerCumulativeScores
+                    .filter(player => player.games >= 1)
+                    .sort((a, b) => {
+                        if (a.avgStrokes !== b.avgStrokes) {
+                            return a.avgStrokes - b.avgStrokes;
+                        }
+                        return b.games - a.games;
+                    });
+                    
                 results[getScoringTypeDisplay(type)] = sortedPlayers;
             }
             
@@ -219,20 +229,28 @@ router.get('/leaderboard/recent', async (req, res) => {
             const scoringType = getScoringTypeFromString(scoringOption);
             const recentScores = await getRecentScores(days, scoringType);
             
-            // Calculate cumulative scores for each player
+            // Calculate cumulative scores and average for each player
             const playerCumulativeScores = Object.entries(recentScores).map(([playerId, scores]) => {
                 const totalStrokes = scores.reduce((sum, score) => sum + score.strokes, 0);
+                const avgStrokes = scores.length > 0 ? totalStrokes / scores.length : 0;
                 return {
                     playerId,
                     playerName: scores[0].playerName,
                     totalStrokes,
                     games: scores.length,
-                    avgStrokes: totalStrokes / scores.length
+                    avgStrokes
                 };
             });
             
-            // Sort by total strokes (lowest first)
-            const sortedPlayers = playerCumulativeScores.sort((a, b) => a.totalStrokes - b.totalStrokes);
+            // Sort by average strokes (lowest first), then by total games (highest first) for tiebreakers
+            const sortedPlayers = playerCumulativeScores
+                .filter(player => player.games >= 1)
+                .sort((a, b) => {
+                    if (a.avgStrokes !== b.avgStrokes) {
+                        return a.avgStrokes - b.avgStrokes;
+                    }
+                    return b.games - a.games;
+                });
             
             res.json({
                 title: `Coffee Golf Leaderboard - Last ${days} Days`,

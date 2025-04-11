@@ -1,5 +1,5 @@
 import { ChatInputCommandInteraction, EmbedBuilder, SlashCommandBuilder } from 'discord.js';
-import { getDailyScores, getRecentScores, getNYCTodayString, formatDate } from '../utils/storage';
+import { getDailyScores, getRecentScores, getNYCTodayString, formatDate, getNYCTodayDate } from '../utils/storage';
 import { ScoringType } from '../types';
 import { getScoringTypeFromString, getScoringTypeDisplay, getScoringTypeColor } from '../utils/scoring';
 
@@ -95,13 +95,31 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 // Helper function to generate position string with ties
 function getPositionString(index: number, scores: any[], currentScore: number): string {
   // Count how many players have the same score before this position
-  const tiedPlayers = scores.filter((s, i) => i < index && s.strokes === currentScore).length;
+  // Check if we're dealing with avgStrokes or regular strokes
+  const isAvgScore = 'avgStrokes' in scores[0];
+  
+  // Count tied players before this position
+  const tiedPlayers = scores.filter((s, i) => {
+    if (i >= index) return false; // Only count players before this position
+    
+    if (isAvgScore) {
+      return Math.abs(s.avgStrokes - currentScore) < 0.001; // For floating point comparison
+    } else {
+      return s.strokes === currentScore; // For integer comparison
+    }
+  }).length;
   
   // If there are tied players, this player's position should be adjusted
   const actualPosition = index - tiedPlayers;
   
-  // Check if this is part of a tie
-  const isPartOfTie = scores.filter(s => s.strokes === currentScore).length > 1;
+  // Check if this is part of a tie (including this player)
+  const isPartOfTie = scores.filter(s => {
+    if (isAvgScore) {
+      return Math.abs(s.avgStrokes - currentScore) < 0.001;
+    } else {
+      return s.strokes === currentScore;
+    }
+  }).length > 1;
   
   if (isPartOfTie) {
     return actualPosition === 0 ? 'T-1' : `T-${actualPosition + 1}`;
@@ -172,35 +190,51 @@ async function showRecentLeaderboard(interaction: ChatInputCommandInteraction, d
         return;
       }
       
-      // Calculate cumulative scores for each player
+      // Calculate cumulative scores and average for each player
       const playerCumulativeScores = Object.entries(recentScores).map(([playerId, scores]) => {
         const totalStrokes = scores.reduce((sum, score) => sum + score.strokes, 0);
+        const avgStrokes = scores.length > 0 ? totalStrokes / scores.length : 0;
         return {
           playerId,
           playerName: scores[0].playerName,
           totalStrokes,
-          games: scores.length
+          games: scores.length,
+          avgStrokes
         };
       });
       
-      // Sort by total strokes (lowest first)
-      const sortedPlayers = playerCumulativeScores.sort((a, b) => a.totalStrokes - b.totalStrokes);
+      // Sort by average strokes (lowest first), then by total games (highest first) for tiebreakers
+      const sortedPlayers = playerCumulativeScores
+        .filter(player => player.games >= 1) // Require at least 1 game
+        .sort((a, b) => {
+          // First sort by average strokes
+          if (a.avgStrokes !== b.avgStrokes) {
+            return a.avgStrokes - b.avgStrokes;
+          }
+          // If tied on average, sort by more games played (reward consistency)
+          return b.games - a.games;
+        });
+      
+      // Get date range in NYC timezone
+      const endDate = getNYCTodayDate();
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - days + 1); // +1 to include today
       
       // Create embed
       const embed = new EmbedBuilder()
         .setColor('#0099ff')
         .setTitle(`☕⛳ Coffee Golf Leaderboard - Last ${days} Days`)
-        .setDescription(`**${getScoringTypeDisplay(scoringType)}**\n${formatDate(new Date(Date.now() - days * 86400000))} to ${formatDate()}`)
+        .setDescription(`**${getScoringTypeDisplay(scoringType)}**\n${formatDate(startDate)} to ${formatDate(endDate)}`)
         .setTimestamp();
       
       // Add scores to embed
       let leaderboardText = '';
       sortedPlayers.forEach((player, index) => {
-        const position = getPositionString(index, sortedPlayers, player.totalStrokes);
-        leaderboardText += `${position} **${player.playerName}**: ${player.totalStrokes} total strokes (${player.games} games)\n`;
+        const position = getPositionString(index, sortedPlayers, player.avgStrokes);
+        leaderboardText += `${position} **${player.playerName}**: ${player.avgStrokes.toFixed(1)} avg strokes (${player.games} games, ${player.totalStrokes} total)\n`;
       });
       
-      embed.addFields({ name: 'Cumulative Scores', value: leaderboardText || 'No scores yet' });
+      embed.addFields({ name: 'Average Scores', value: leaderboardText || 'No scores yet' });
       
       await interaction.editReply({ embeds: [embed] });
     }
@@ -208,12 +242,6 @@ async function showRecentLeaderboard(interaction: ChatInputCommandInteraction, d
     console.error('Error in showRecentLeaderboard:', error);
     throw error;
   }
-}
-
-// Format date as "Month Day, Year"
-function formatReadableDate(dateStr: string | Date): string {
-  const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // New function to display multiple scoring types for today
@@ -276,19 +304,30 @@ async function showMultipleRecentScoringTypes(interaction: ChatInputCommandInter
         continue; // Skip this scoring type if no scores
       }
       
-      // Calculate cumulative scores for each player
+      // Calculate cumulative scores and average for each player
       const playerCumulativeScores = Object.entries(recentScores).map(([playerId, scores]) => {
         const totalStrokes = scores.reduce((sum, score) => sum + score.strokes, 0);
+        const avgStrokes = scores.length > 0 ? totalStrokes / scores.length : 0;
         return {
           playerId,
           playerName: scores[0].playerName,
           totalStrokes,
-          games: scores.length
+          games: scores.length,
+          avgStrokes
         };
       });
       
-      // Sort by total strokes (lowest first)
-      const sortedPlayers = playerCumulativeScores.sort((a, b) => a.totalStrokes - b.totalStrokes);
+      // Sort by average strokes (lowest first), then by total games (highest first) for tiebreakers
+      const sortedPlayers = playerCumulativeScores
+        .filter(player => player.games >= 1) // Require at least 1 game
+        .sort((a, b) => {
+          // First sort by average strokes
+          if (a.avgStrokes !== b.avgStrokes) {
+            return a.avgStrokes - b.avgStrokes;
+          }
+          // If tied on average, sort by more games played (reward consistency)
+          return b.games - a.games;
+        });
       
       // Create embed
       const embed = new EmbedBuilder()
@@ -299,11 +338,11 @@ async function showMultipleRecentScoringTypes(interaction: ChatInputCommandInter
       // Add scores to embed
       let leaderboardText = '';
       sortedPlayers.forEach((player, index) => {
-        const position = getPositionString(index, sortedPlayers, player.totalStrokes);
-        leaderboardText += `${position} **${player.playerName}**: ${player.totalStrokes} total strokes (${player.games} games)\n`;
+        const position = getPositionString(index, sortedPlayers, player.avgStrokes);
+        leaderboardText += `${position} **${player.playerName}**: ${player.avgStrokes.toFixed(1)} avg strokes (${player.games} games, ${player.totalStrokes} total)\n`;
       });
       
-      embed.addFields({ name: 'Cumulative Scores', value: leaderboardText || 'No scores yet' });
+      embed.addFields({ name: 'Average Scores', value: leaderboardText || 'No scores yet' });
       embeds.push(embed);
     } catch (error) {
       console.error(`Error generating leaderboard for ${scoringType}:`, error);
@@ -315,11 +354,16 @@ async function showMultipleRecentScoringTypes(interaction: ChatInputCommandInter
     return;
   }
   
+  // Get date range in NYC timezone
+  const endDate = getNYCTodayDate();
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - days + 1); // +1 to include today
+  
   // Add master title embed
   const titleEmbed = new EmbedBuilder()
     .setColor('#0099ff')
     .setTitle(`☕⛳ Coffee Golf Leaderboard - Last ${days} Days`)
-    .setDescription(`**All Scoring Types**\n${formatDate(new Date(Date.now() - days * 86400000))} to ${formatDate()}`)
+    .setDescription(`**All Scoring Types**\n${formatDate(startDate)} to ${formatDate(endDate)}`)
     .setTimestamp();
   
   embeds.unshift(titleEmbed);

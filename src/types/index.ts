@@ -58,5 +58,6 @@ export interface Score {
     playerName: string;
     totalStrokes: number;
     games: number;
+    avgStrokes: number; // Adding average strokes per round
   }
   
