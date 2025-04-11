@@ -1,6 +1,7 @@
 import { Storage } from '@google-cloud/storage';
 import { ScoreData, Score, PlayerStats, ScoringType } from '../types';
 import { config } from 'dotenv';
+import NodeCache from 'node-cache';
 
 // Load environment variables
 config();
@@ -26,6 +27,9 @@ const defaultData: ScoreData = {
   dailyScores: {},
   tournaments: []
 };
+
+// Cache for score data (TTL: 5 minutes)
+const scoreCache = new NodeCache({ stdTTL: 300 });
 
 // Load data from Cloud Storage or create new file if it doesn't exist
 export async function loadData(): Promise<ScoreData> {
@@ -121,6 +125,9 @@ export async function addScore(score: Score): Promise<{ isFirst: boolean, attemp
   const isFirst = data.dailyScores[date][playerId].length === 1;
   const attemptNumber = data.dailyScores[date][playerId].length;
   
+  // Clear cache after adding a new score
+  scoreCache.del('scoreData');
+  
   return { isFirst, attemptNumber };
 }
 
@@ -141,42 +148,79 @@ export async function getPlayerStats(playerId: string): Promise<PlayerStats | nu
 
 // Get all scores for a specific date by scoring type
 export async function getDailyScores(date: string, scoringType: ScoringType): Promise<Score[]> {
-  console.log('getDailyScores() called with date:', date, 'scoringType:', scoringType);
-  const data = await loadData();
+  console.log(`getDailyScores() called with date: ${date} scoringType: ${scoringType}`);
   
-  if (!data.dailyScores[date]) {
-    console.log('No scores found for date:', date);
-    console.log('Most recent date:', Object.keys(data.dailyScores).sort().pop());
-    return [];
+  // Create cache key based on date
+  const cacheKey = `scores_${date}`;
+  
+  // Check if raw scores for this date are cached
+  let dailyScores = scoreCache.get(cacheKey) as Record<string, Score[]>;
+  
+  if (!dailyScores) {
+    // First ensure base data is loaded if it isn't already cached
+    if (!scoreCache.has('scoreData')) {
+      // Preload all score data into cache
+      const data = await loadData();
+      scoreCache.set('scoreData', data);
+      console.log('Preloaded score data into cache');
+    }
+    
+    // Get the cached data (with null check)
+    const data = scoreCache.get('scoreData') as ScoreData | undefined;
+    dailyScores = {};
+    
+    // Extract scores for the specific date with null check
+    if (data && data.dailyScores && data.dailyScores[date]) {
+      dailyScores = data.dailyScores[date];
+    }
+    
+    // Cache the raw scores for this date
+    scoreCache.set(cacheKey, dailyScores);
+    console.log(`Cached scores for date: ${date}`);
   }
+  
+  console.log(`Found cached scores for date: ${date}`);
+  
+  // Now apply scoring type filters in memory (no need for another storage call)
+  return applyScoring(dailyScores, scoringType);
+}
 
-  const dailyScores = data.dailyScores[date];
-  console.log('Found raw scores for date:', date, 'scores:', JSON.stringify(dailyScores, null, 2));
-
-  switch (scoringType) {
-    case ScoringType.FIRST:
-      // Get first attempts only
-      return Object.values(dailyScores).map(attempts => attempts[0]);
-      
-    case ScoringType.BEST:
-      // Get best of first 3 attempts
-      return Object.values(dailyScores).map(attempts => 
-        attempts.slice(0, 3).reduce((best, current) => 
-          current.strokes < best.strokes ? current : best
-        )
-      );
-      
-    case ScoringType.UNLIMITED:
-      // Get best attempt regardless of attempt number
-      return Object.values(dailyScores).map(attempts => 
-        attempts.reduce((best, current) => 
-          current.strokes < best.strokes ? current : best
-        )
-      );
-      
-    default:
-      return [];
-  }
+// Helper function to apply scoring type filters to raw scores
+function applyScoring(rawScores: Record<string, Score[]>, scoringType: ScoringType): Score[] {
+  const result: Score[] = [];
+  
+  Object.values(rawScores).forEach(playerScores => {
+    // Sort by timestamp (oldest first)
+    const sortedScores = [...playerScores].sort((a, b) => a.timestamp - b.timestamp);
+    
+    switch (scoringType) {
+      case ScoringType.FIRST:
+        // First attempt only
+        if (sortedScores.length > 0) {
+          result.push(sortedScores[0]);
+        }
+        break;
+      case ScoringType.BEST:
+        // Best of first three attempts
+        if (sortedScores.length > 0) {
+          const firstThree = sortedScores.slice(0, 3);
+          const best = firstThree.reduce((min, score) => 
+            score.strokes < min.strokes ? score : min, firstThree[0]);
+          result.push(best);
+        }
+        break;
+      case ScoringType.UNLIMITED:
+        // Best score overall
+        if (sortedScores.length > 0) {
+          const best = sortedScores.reduce((min, score) => 
+            score.strokes < min.strokes ? score : min, sortedScores[0]);
+          result.push(best);
+        }
+        break;
+    }
+  });
+  
+  return result;
 }
 
 // Get recent scores (last X days)
