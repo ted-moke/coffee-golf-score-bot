@@ -74,18 +74,18 @@ async function checkTopScoreAndReact(message: Message, scoreData: Score): Promis
   const unlimitedScores = await getDailyScores(date, ScoringType.UNLIMITED);
   const lowestUnlimitedScore = Math.min(...unlimitedScores.map(s => s.strokes)) || Infinity;
   
-  // Add reactions based on which categories this score is best in
+  // Add reactions based on which categories this score is STRICTLY better in
   let topCategories = [];
   
-  // Check if it's the best first attempt
-  if (scoreData.strokes <= lowestFirstScore) {
+  // Check if it's the best first attempt (strictly better)
+  if (scoreData.strokes < lowestFirstScore) {
     await message.react('🏆');
     await message.react('☝🏽');
     topCategories.push("first attempt");
   }
   
-  // Check if it's the best of 3
-  if (scoreData.strokes <= lowestBestOfThreeScore) {
+  // Check if it's the best of 3 (strictly better)
+  if (scoreData.strokes < lowestBestOfThreeScore) {
     // Only add trophy if we didn't already add it for first attempt
     if (topCategories.length === 0) {
       await message.react('🏆');
@@ -94,8 +94,8 @@ async function checkTopScoreAndReact(message: Message, scoreData: Score): Promis
     topCategories.push("best of three");
   }
   
-  // Check if it's the best unlimited
-  if (scoreData.strokes <= lowestUnlimitedScore) {
+  // Check if it's the best unlimited (strictly better)
+  if (scoreData.strokes < lowestUnlimitedScore) {
     // Only add trophy if we didn't already add it for another category
     if (topCategories.length === 0) {
       await message.react('🏆');
