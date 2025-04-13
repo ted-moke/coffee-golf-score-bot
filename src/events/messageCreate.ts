@@ -62,6 +62,12 @@ export async function handleMessage(message: Message): Promise<void> {
 async function checkTopScoreAndReact(message: Message, scoreData: Score): Promise<void> {
   const date = scoreData.date;
   
+  // Get player's attempts for today to determine which scoring types apply
+  const playerAttempts = await getPlayerAttemptsToday(scoreData.playerId);
+  const attemptNumber = playerAttempts; // This is the current attempt number
+  
+  console.log(`Player ${scoreData.playerName} attempt #${attemptNumber} with score ${scoreData.strokes}`);
+  
   // Check for first attempt scores (ScoringType.FIRST)
   const firstScores = await getDailyScores(date, ScoringType.FIRST);
   const lowestFirstScore = Math.min(...firstScores.map(s => s.strokes)) || Infinity;
@@ -77,15 +83,15 @@ async function checkTopScoreAndReact(message: Message, scoreData: Score): Promis
   // Add reactions based on which categories this score is STRICTLY better in
   let topCategories = [];
   
-  // Check if it's the best first attempt (strictly better)
-  if (scoreData.strokes < lowestFirstScore) {
+  // Check if it's the best first attempt (only if this is their first attempt)
+  if (attemptNumber === 1 && scoreData.strokes < lowestFirstScore) {
     await message.react('🏆');
     await message.react('☝🏽');
     topCategories.push("first attempt");
   }
   
-  // Check if it's the best of 3 (strictly better)
-  if (scoreData.strokes < lowestBestOfThreeScore) {
+  // Check if it's the best of 3 (only if this is within their first 3 attempts)
+  if (attemptNumber <= 3 && scoreData.strokes < lowestBestOfThreeScore) {
     // Only add trophy if we didn't already add it for first attempt
     if (topCategories.length === 0) {
       await message.react('🏆');
@@ -94,7 +100,7 @@ async function checkTopScoreAndReact(message: Message, scoreData: Score): Promis
     topCategories.push("best of three");
   }
   
-  // Check if it's the best unlimited (strictly better)
+  // Check if it's the best unlimited (always applies)
   if (scoreData.strokes < lowestUnlimitedScore) {
     // Only add trophy if we didn't already add it for another category
     if (topCategories.length === 0) {
