@@ -55,7 +55,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     // Don't defer the reply immediately, try to respond quickly first
     try {
         const subcommand = interaction.options.getSubcommand();
-        const scoringOption = (interaction.options.getString('scoring') || 'first') as string;
+        const scoringOption = interaction.options.getString('scoring');
         
         console.log(`Leaderboard command received from ${interaction.user.username}`);
         console.log(`Subcommand: ${subcommand}, Scoring option: ${scoringOption}`);
@@ -68,11 +68,25 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
         if (subcommand === 'today') {
             console.log('Fetching today\'s leaderboard');
-            await showTodayLeaderboard(interaction, scoringOption);
+            // If no scoring option is specified, show both first and best
+            if (!scoringOption) {
+                await showMultipleScoringTypes(interaction, [ScoringType.FIRST, ScoringType.BEST], getNYCTodayString());
+            } else if (scoringOption === 'all') {
+                await showMultipleScoringTypes(interaction, [ScoringType.FIRST, ScoringType.BEST, ScoringType.UNLIMITED], getNYCTodayString());
+            } else {
+                await showTodayLeaderboard(interaction, scoringOption);
+            }
         } else if (subcommand === 'recent') {
             const days = interaction.options.getInteger('days') || 7;
             console.log(`Fetching recent leaderboard for ${days} days`);
-            await showRecentLeaderboard(interaction, days, scoringOption);
+            // If no scoring option is specified, show both first and best
+            if (!scoringOption) {
+                await showMultipleRecentScoringTypes(interaction, days, [ScoringType.FIRST, ScoringType.BEST]);
+            } else if (scoringOption === 'all') {
+                await showMultipleRecentScoringTypes(interaction, days, [ScoringType.FIRST, ScoringType.BEST, ScoringType.UNLIMITED]);
+            } else {
+                await showRecentLeaderboard(interaction, days, scoringOption);
+            }
         }
     } catch (error) {
         console.error('Error executing leaderboard command:', error);
@@ -194,12 +208,15 @@ async function showRecentLeaderboard(interaction: ChatInputCommandInteraction, d
       const playerCumulativeScores = Object.entries(recentScores).map(([playerId, scores]) => {
         const totalStrokes = scores.reduce((sum, score) => sum + score.strokes, 0);
         const avgStrokes = scores.length > 0 ? totalStrokes / scores.length : 0;
+        // Sort scores by date (oldest to newest)
+        const sortedScores = [...scores].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         return {
           playerId,
           playerName: scores[0].playerName,
           totalStrokes,
           games: scores.length,
-          avgStrokes
+          avgStrokes,
+          individualScores: sortedScores.map(s => s.strokes) // Store individual scores
         };
       });
       
@@ -227,14 +244,31 @@ async function showRecentLeaderboard(interaction: ChatInputCommandInteraction, d
         .setDescription(`**${getScoringTypeDisplay(scoringType)}**\n${formatDate(startDate)} to ${formatDate(endDate)}`)
         .setTimestamp();
       
-      // Add scores to embed
-      let leaderboardText = '';
+      // Fixed player name length of 11 characters
+      const nameLength = 11;
+      
+      // Create a table-like format using code block with monospaced font
+      let leaderboardText = '```\n';
+      leaderboardText += 'POS  PLAYER       AVG    ROUNDS TOTAL\n';
+      leaderboardText += '─'.repeat(30) + '\n';
+      
       sortedPlayers.forEach((player, index) => {
         const position = getPositionString(index, sortedPlayers, player.avgStrokes);
-        leaderboardText += `${position} **${player.playerName}**: ${player.avgStrokes.toFixed(1)} avg strokes (${player.games} games, ${player.totalStrokes} total)\n`;
+        // Truncate and pad the player name to exactly 11 characters
+        const truncatedName = player.playerName.length > nameLength 
+          ? player.playerName.substring(0, nameLength - 1) + '…' 
+          : player.playerName;
+        const paddedName = truncatedName.padEnd(nameLength);
+        
+        // Format individual scores with commas
+        const scoresDisplay = player.individualScores.join(', ');
+        
+        leaderboardText += `${position.padEnd(4)} ${paddedName} ${player.avgStrokes.toFixed(1).padEnd(6)} ${scoresDisplay.padEnd(15)} ${player.totalStrokes}\n`;
       });
       
-      embed.addFields({ name: 'Average Scores', value: leaderboardText || 'No scores yet' });
+      leaderboardText += '```';
+      
+      embed.addFields({ name: 'Scores', value: leaderboardText || 'No scores yet' });
       
       await interaction.editReply({ embeds: [embed] });
     }
@@ -308,12 +342,15 @@ async function showMultipleRecentScoringTypes(interaction: ChatInputCommandInter
       const playerCumulativeScores = Object.entries(recentScores).map(([playerId, scores]) => {
         const totalStrokes = scores.reduce((sum, score) => sum + score.strokes, 0);
         const avgStrokes = scores.length > 0 ? totalStrokes / scores.length : 0;
+        // Sort scores by date (oldest to newest)
+        const sortedScores = [...scores].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         return {
           playerId,
           playerName: scores[0].playerName,
           totalStrokes,
           games: scores.length,
-          avgStrokes
+          avgStrokes,
+          individualScores: sortedScores.map(s => s.strokes) // Store individual scores
         };
       });
       
@@ -335,14 +372,31 @@ async function showMultipleRecentScoringTypes(interaction: ChatInputCommandInter
         .setTitle(`☕⛳ ${getScoringTypeDisplay(scoringType)}`)
         .setTimestamp();
       
-      // Add scores to embed
-      let leaderboardText = '';
+      // Fixed player name length of 11 characters
+      const nameLength = 11;
+      
+      // Create a table-like format using code block with monospaced font
+      let leaderboardText = '```\n';
+      leaderboardText += 'POS  PLAYER       AVG    ROUNDS       TOTAL\n';
+      leaderboardText += '─'.repeat(45) + '\n';
+      
       sortedPlayers.forEach((player, index) => {
         const position = getPositionString(index, sortedPlayers, player.avgStrokes);
-        leaderboardText += `${position} **${player.playerName}**: ${player.avgStrokes.toFixed(1)} avg strokes (${player.games} games, ${player.totalStrokes} total)\n`;
+        // Truncate and pad the player name to exactly 11 characters
+        const truncatedName = player.playerName.length > nameLength 
+          ? player.playerName.substring(0, nameLength - 1) + '…' 
+          : player.playerName;
+        const paddedName = truncatedName.padEnd(nameLength);
+        
+        // Format individual scores with commas
+        const scoresDisplay = player.individualScores.join(', ');
+        
+        leaderboardText += `${position.padEnd(4)} ${paddedName} ${player.avgStrokes.toFixed(1).padEnd(6)} ${scoresDisplay.padEnd(15)} ${player.totalStrokes}\n`;
       });
       
-      embed.addFields({ name: 'Average Scores', value: leaderboardText || 'No scores yet' });
+      leaderboardText += '```';
+      
+      embed.addFields({ name: 'Scores', value: leaderboardText || 'No scores yet' });
       embeds.push(embed);
     } catch (error) {
       console.error(`Error generating leaderboard for ${scoringType}:`, error);
