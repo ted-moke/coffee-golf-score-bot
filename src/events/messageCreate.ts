@@ -55,14 +55,6 @@ export async function handleMessage(message: Message): Promise<void> {
 
     if (currentAttempts >= MAX_ATTEMPTS) {
       // Player has reached max attempts for today
-      try {
-        await message.react("❌");
-        await message.reply(
-          `You've already used all ${MAX_ATTEMPTS} attempts for today. This score won't be counted.`
-        );
-      } catch (error) {
-        console.error("Error adding reaction:", error);
-      }
       return;
     }
 
